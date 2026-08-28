@@ -1,0 +1,41 @@
+name: Collecte des données Vélo'v Tabareau
+
+on:
+  schedule:
+    # Toutes les 15 minutes. GitHub peut retarder légèrement les jobs cron
+    # en cas de forte charge sur la plateforme, ce n'est pas un problème ici.
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collect-data
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Télécharger l'état des stations Vélo'v
+        run: |
+          curl -sSf 'https://download.data.grandlyon.com/files/rdata/jcd_jcdecaux.jcdvelov/station_status.json' -o /tmp/status.json
+
+      - name: Ajouter le relevé à l'historique
+        run: python3 scripts/collect.py /tmp/status.json data/history.jsonl
+
+      - name: Committer si l'historique a changé
+        run: |
+          git config user.name "velov-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/history.jsonl
+          if git diff --cached --quiet; then
+            echo "Rien à committer."
+          else
+            git commit -m "Mise à jour de l'historique Vélo'v"
+            git push
+          fi

@@ -4,10 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Vélo'v Tabareau</title>
-<meta name="description" content="Suivi en direct de la station Vélo'v Tabareau (Lyon) : vélos électriques disponibles, places libres, stations de secours à proximité, carte et itinéraire avec dénivelé." />
+<meta name="description" content="Suivi en direct de la station Vélo'v Tabareau (Lyon) : vélos électriques disponibles, places libres, stations de secours à proximité, carte, itinéraire avec dénivelé et tendances horaires." />
 <meta property="og:title" content="Vélo'v Tabareau" />
-<meta property="og:description" content="Suivi en direct de la station Vélo'v Tabareau (Lyon, Croix-Rousse) : disponibilité des vélos électriques, carte et itinéraire." />
+<meta property="og:description" content="Suivi en direct de la station Vélo'v Tabareau (Lyon, Croix-Rousse) : disponibilité des vélos électriques, carte, itinéraire et tendances." />
 <meta property="og:type" content="website" />
+<meta name="theme-color" content="#0a84ff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Vélo'v Tabareau">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icons/icon-180.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9A%B2%3C/text%3E%3C/svg%3E" />
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
 <style>
@@ -78,6 +84,22 @@
   .banner.warn .status{color:var(--orange);}
   .banner.crit .status{color:var(--red);}
 
+  /* ---------- tabs ---------- */
+  .tabbar{
+    display:flex; gap:6px; background:var(--card2); padding:5px; border-radius:14px;
+    margin-bottom:20px; overflow-x:auto; border:1px solid var(--border);
+  }
+  .tabbtn{
+    flex:1; display:flex; align-items:center; justify-content:center; gap:7px;
+    padding:11px 14px; border-radius:10px; background:transparent; color:var(--muted);
+    font-size:0.92rem; font-weight:600; white-space:nowrap;
+  }
+  .tabbtn svg{width:16px; height:16px; flex-shrink:0;}
+  .tabbtn.active{background:var(--card); color:var(--text); box-shadow:var(--shadow);}
+  .tabpanel{display:none;}
+  .tabpanel.active{display:block; animation:fadein 0.2s ease;}
+  @keyframes fadein{ from{opacity:0;} to{opacity:1;} }
+
   /* ---------- KPI dashboard row ---------- */
   .kpi-row{display:grid; grid-template-columns:1.3fr 1fr 1fr; gap:16px; margin-bottom:20px;}
   @media (max-width:900px){ .kpi-row{grid-template-columns:1fr;} }
@@ -108,19 +130,17 @@
   .kpi-alt-name{font-size:1.3rem; font-weight:700; margin-top:2px;}
   .kpi-alt-empty{font-size:0.95rem; color:var(--muted); margin-top:8px;}
 
-  /* ---------- panels grid: map + list ---------- */
-  .panels{display:grid; grid-template-columns:1.5fr 1fr; gap:18px; margin-bottom:20px; align-items:stretch;}
-  @media (max-width:980px){ .panels{grid-template-columns:1fr;} }
+  /* ---------- panels ---------- */
   .panel{
     background:var(--card); border:1px solid var(--border); border-radius:20px; padding:20px;
-    box-shadow:var(--shadow); display:flex; flex-direction:column;
+    box-shadow:var(--shadow); display:flex; flex-direction:column; margin-bottom:18px;
   }
   .panel-head{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:14px; gap:10px; flex-wrap:wrap;}
   h2{font-size:1.05rem; margin:0; font-weight:700; letter-spacing:-0.01em; display:flex; align-items:center; gap:8px;}
   h2 svg{width:18px; height:18px; color:var(--accent); flex-shrink:0;}
   .panel-tag{font-size:0.8rem; color:var(--muted); font-weight:500;}
   #map{
-    width:100%; height:clamp(420px, 56vh, 640px); border-radius:14px; border:1px solid var(--border);
+    width:100%; height:clamp(460px, 68vh, 720px); border-radius:14px; border:1px solid var(--border);
     background:var(--card2);
   }
   .legend{display:flex; gap:16px; margin-top:14px; font-size:0.82rem; color:var(--muted); flex-wrap:wrap;}
@@ -132,7 +152,7 @@
   .legend i.dest{background:var(--accent);}
   .legend svg{width:13px; height:13px; color:var(--star);}
 
-  .stationlist{overflow-y:auto; max-height:clamp(420px, 56vh, 640px); margin:0 -6px; padding:0 6px;}
+  .stationlist{overflow-y:auto; max-height:60vh; margin:0 -6px; padding:0 6px;}
   .stationline{
     display:flex; justify-content:space-between; align-items:center;
     padding:14px 4px; border-bottom:1px solid var(--border); gap:12px;
@@ -171,6 +191,24 @@
   a:hover{text-decoration:underline;}
   .footer{text-align:center; color:var(--muted); font-size:0.78rem; margin-top:28px; line-height:1.7;}
 
+  /* ---------- favorite destinations ---------- */
+  .fav-chips{display:flex; gap:8px; flex-wrap:wrap; margin:14px 0 4px;}
+  .fav-chip{display:inline-flex; align-items:stretch; background:var(--card2); border:1px solid var(--border); border-radius:100px; overflow:hidden;}
+  .fav-chip button{background:transparent; border-radius:0; color:var(--text); font-size:0.83rem; font-weight:500; padding:7px 10px; display:flex; align-items:center; gap:5px;}
+  .fav-chip-main{padding-left:14px !important;}
+  .fav-chip-main svg{width:12px; height:12px; color:var(--star);}
+  .fav-chip-pin svg{width:12px; height:12px; color:var(--muted);}
+  .fav-chip-pin.pinned svg{color:var(--star);}
+  .fav-chip-remove{font-size:1rem !important; padding:7px 12px !important; line-height:1; color:var(--muted);}
+  .fav-chip:hover .fav-chip-remove{color:var(--red);}
+
+  /* ---------- trends ---------- */
+  .trend-chart{display:flex; align-items:flex-end; gap:4px; margin-top:6px;}
+  .trend-col{flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; min-width:0;}
+  .trend-bar-track{width:100%; height:150px; display:flex; align-items:flex-end;}
+  .trend-bar{width:100%; border-radius:4px 4px 0 0; min-height:4px;}
+  .trend-h{font-size:0.62rem; color:var(--muted);}
+
   .leaflet-popup-content{font-family:inherit; font-size:0.9rem;}
   .leaflet-popup-content-wrapper, .leaflet-popup-tip{background:var(--card); color:var(--text);}
   .stationLabel{
@@ -200,13 +238,29 @@
 
   <div id="banner" class="banner"><p>Chargement des données…</p></div>
 
-  <div class="kpi-row">
-    <div class="kpi hero" id="kpiElec"></div>
-    <div class="kpi" id="kpiDocks"></div>
-    <div class="kpi" id="kpiAlt"></div>
+  <div class="tabbar">
+    <button class="tabbtn active" id="tabbtn-accueil" onclick="showTab('accueil')">Accueil</button>
+    <button class="tabbtn" id="tabbtn-carte" onclick="showTab('carte')">Carte</button>
+    <button class="tabbtn" id="tabbtn-itineraire" onclick="showTab('itineraire')">Itinéraire</button>
+    <button class="tabbtn" id="tabbtn-tendances" onclick="showTab('tendances')">Tendances</button>
   </div>
 
-  <div class="panels">
+  <div class="tabpanel active" id="tab-accueil">
+    <div class="kpi-row">
+      <div class="kpi hero" id="kpiElec"></div>
+      <div class="kpi" id="kpiDocks"></div>
+      <div class="kpi" id="kpiAlt"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <h2 id="nearbyTitle">À proximité</h2>
+        <span class="panel-tag">toutes sur le plateau, pas de côte en plus</span>
+      </div>
+      <div class="stationlist" id="nearby"></div>
+    </div>
+  </div>
+
+  <div class="tabpanel" id="tab-carte">
     <div class="panel">
       <div class="panel-head">
         <h2 id="mapTitle">Carte des stations</h2>
@@ -221,26 +275,31 @@
         <span id="legendStar">meilleure alternative</span>
       </div>
     </div>
+  </div>
 
+  <div class="tabpanel" id="tab-itineraire">
     <div class="panel">
       <div class="panel-head">
-        <h2 id="nearbyTitle">À proximité</h2>
-        <span class="panel-tag">toutes sur le plateau, pas de côte en plus</span>
+        <h2 id="tripTitle">Où te rends-tu ?</h2>
+        <span class="panel-tag">itinéraire, temps de trajet &amp; dénivelé du retour</span>
       </div>
-      <div class="stationlist" id="nearby"></div>
+      <div class="trip-input-row">
+        <input type="text" id="destInput" placeholder="Ex : Bellecour, Part-Dieu, 12 rue de la République..." />
+        <button class="btn-primary" style="width:auto;" onclick="estimateTrip()">Tracer l'itinéraire</button>
+      </div>
+      <div class="fav-chips" id="favChips" style="display:none;"></div>
+      <div id="tripResult"></div>
     </div>
   </div>
 
-  <div class="panel" style="margin-bottom:18px;">
-    <div class="panel-head">
-      <h2 id="tripTitle">Où te rends-tu ?</h2>
-      <span class="panel-tag">itinéraire, temps de trajet &amp; dénivelé du retour</span>
+  <div class="tabpanel" id="tab-tendances">
+    <div class="panel">
+      <div class="panel-head">
+        <h2 id="trendsTitle">Tendances</h2>
+        <span class="panel-tag">disponibilité moyenne par heure, collectée automatiquement</span>
+      </div>
+      <div id="trendsBody"></div>
     </div>
-    <div class="trip-input-row">
-      <input type="text" id="destInput" placeholder="Ex : Bellecour, Part-Dieu, 12 rue de la République..." />
-      <button class="btn-primary" style="width:auto;" onclick="estimateTrip()">Tracer l'itinéraire</button>
-    </div>
-    <div id="tripResult"></div>
   </div>
 
   <p class="footer">
@@ -286,6 +345,7 @@ const ICON = {
   uphill: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18h4l3-8 3 5 3-9 5 12"/></svg>',
   downhill: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l4 8 3-4 3 6 3-9 5 6"/></svg>',
   flat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"/></svg>',
+  chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="20" x2="20" y2="20"/><rect x="6" y="12" width="3" height="8"/><rect x="12" y="7" width="3" height="13"/><rect x="18" y="15" width="3" height="5"/></svg>',
 };
 function ic(name){ return ICON[name] || ''; }
 
@@ -294,6 +354,10 @@ const GEOCODE_URL = 'https://api-adresse.data.gouv.fr/search/';
 const ROUTE_URL = 'https://router.project-osrm.org/route/v1/bike/';
 const WEATHER_URL = 'https://api.open-meteo.com/v1/forecast';
 const ELEVATION_URL = 'https://api.open-meteo.com/v1/elevation';
+const HISTORY_URL = './data/history.jsonl';
+const CACHE_KEY = 'velov_last_status';
+const FAV_KEY = 'velov_destinations';
+const TAB_KEY = 'velov_active_tab';
 
 // --- Carte ---
 let map, stationLayer, routeLayer;
@@ -302,6 +366,9 @@ const LEVEL_COLOR = { ok:'#30d158', warn:'#ff9f0a', crit:'#ff453a' };
 function level(n){ if(n<=0) return 'crit'; if(n<=2) return 'warn'; return 'ok'; }
 function worst(a,b){ const order = {ok:0, warn:1, crit:2}; return order[a] >= order[b] ? a : b; }
 function pct(n, cap){ return Math.max(4, Math.min(100, Math.round((n/cap)*100))); }
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 
 // Vue mécanique / électrique d'une station — c'est le nombre ÉLECTRIQUE qui pilote
 // les couleurs et alertes, puisque c'est ce que tu utilises en priorité.
@@ -320,8 +387,13 @@ function applyStaticIcons(){
   document.getElementById('mapTitle').innerHTML = ic('map') + ' Carte des stations';
   document.getElementById('nearbyTitle').innerHTML = ic('swap') + ' À proximité';
   document.getElementById('tripTitle').innerHTML = ic('route') + ' Où te rends-tu ?';
+  document.getElementById('trendsTitle').innerHTML = ic('chart') + ' Tendances';
   document.getElementById('legendStar').innerHTML = ic('star') + ' meilleure alternative';
   document.getElementById('refreshIcon').innerHTML = ic('refresh');
+  document.getElementById('tabbtn-accueil').innerHTML = ic('bolt') + ' Accueil';
+  document.getElementById('tabbtn-carte').innerHTML = ic('map') + ' Carte';
+  document.getElementById('tabbtn-itineraire').innerHTML = ic('route') + ' Itinéraire';
+  document.getElementById('tabbtn-tendances').innerHTML = ic('chart') + ' Tendances';
 }
 
 function timeAgo(epochSeconds){
@@ -330,6 +402,24 @@ function timeAgo(epochSeconds){
   if(diffMin <= 0) return "à l'instant";
   if(diffMin === 1) return "1 min";
   return `${diffMin} min`;
+}
+
+// --- Onglets ---
+function showTab(name){
+  const tabs = ['accueil','carte','itineraire','tendances'];
+  for(const t of tabs){
+    const panel = document.getElementById('tab-'+t);
+    const btn = document.getElementById('tabbtn-'+t);
+    if(panel) panel.classList.toggle('active', t===name);
+    if(btn) btn.classList.toggle('active', t===name);
+  }
+  try{ localStorage.setItem(TAB_KEY, name); }catch(e){}
+  if(name === 'carte' && map){
+    setTimeout(() => map.invalidateSize(), 60);
+  }
+  if(name === 'tendances'){
+    renderTrends();
+  }
 }
 
 function initMap(){
@@ -524,31 +614,57 @@ function renderNearby(statusMap, bestId){
   }).join('');
 }
 
+// --- Cache hors-ligne : dernières données connues en localStorage ---
+function saveStatusCache(statusMap){
+  try{ localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), statusMap })); }catch(e){}
+}
+function loadStatusCache(){
+  try{
+    const raw = localStorage.getItem(CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+
+function renderFromStatusMap(statusMap){
+  const tStatus = statusMap[TABAREAU.id];
+  if(!tStatus) throw new Error('Station Tabareau introuvable dans les données');
+  const { elec } = vehicleSplit(tStatus);
+  const eLvl = level(elec);
+  const dLvl = level(tStatus.num_docks_available);
+  const needElec = eLvl !== 'ok', needDocks = dLvl !== 'ok';
+  const bestId = (needElec || needDocks) ? bestAlternative(statusMap, needElec, needDocks) : null;
+  renderBanner(eLvl, dLvl, bestId);
+  renderKPIs(tStatus, bestId, statusMap);
+  renderNearby(statusMap, bestId);
+  renderMapStations(statusMap, bestId);
+}
+
 async function loadAll(){
   const btn = document.getElementById('refreshBtn');
   const icon = document.getElementById('refreshIcon');
   btn.disabled = true; icon.classList.add('spinning');
   try{
     const statusMap = await fetchStatusMap();
-    const tStatus = statusMap[TABAREAU.id];
-    if(!tStatus) throw new Error('Station Tabareau introuvable dans les données');
-    const { elec } = vehicleSplit(tStatus);
-    const eLvl = level(elec);
-    const dLvl = level(tStatus.num_docks_available);
-    const needElec = eLvl !== 'ok', needDocks = dLvl !== 'ok';
-    const bestId = (needElec || needDocks) ? bestAlternative(statusMap, needElec, needDocks) : null;
-
-    renderBanner(eLvl, dLvl, bestId);
-    renderKPIs(tStatus, bestId, statusMap);
-    renderNearby(statusMap, bestId);
-    renderMapStations(statusMap, bestId);
+    renderFromStatusMap(statusMap);
+    saveStatusCache(statusMap);
     fetchWeather();
-
     const now = new Date();
     document.getElementById('lastUpdate').textContent = now.toLocaleTimeString('fr-FR');
   } catch(e){
-    document.getElementById('banner').className = 'banner crit';
-    document.getElementById('banner').innerHTML = `<div class="icon-badge crit-bg">${ic('alert')}</div><div><div class="status">Erreur de chargement</div><p>Impossible de récupérer les données en direct (${e.message}). Vérifie ta connexion et réessaie.</p></div>`;
+    const cached = loadStatusCache();
+    if(cached && cached.statusMap){
+      try{
+        renderFromStatusMap(cached.statusMap);
+        const ageMin = Math.max(0, Math.round((Date.now() - cached.savedAt) / 60000));
+        document.getElementById('freshness').innerHTML = ic('alert') + ` Hors ligne · dernières données il y a ${ageMin} min`;
+      } catch(inner){
+        document.getElementById('banner').className = 'banner crit';
+        document.getElementById('banner').innerHTML = `<div class="icon-badge crit-bg">${ic('alert')}</div><div><div class="status">Erreur de chargement</div><p>Impossible de récupérer les données en direct (${e.message}). Vérifie ta connexion et réessaie.</p></div>`;
+      }
+    } else {
+      document.getElementById('banner').className = 'banner crit';
+      document.getElementById('banner').innerHTML = `<div class="icon-badge crit-bg">${ic('alert')}</div><div><div class="status">Erreur de chargement</div><p>Impossible de récupérer les données en direct (${e.message}). Vérifie ta connexion et réessaie.</p></div>`;
+    }
   } finally {
     btn.disabled = false; icon.classList.remove('spinning');
   }
@@ -584,6 +700,71 @@ async function fetchElevationDelta(lat, lon){
   }
 }
 
+// --- Profil de dénivelé plus fin : plusieurs points le long du tracé réel ---
+async function fetchElevationProfile(coordsLonLat){
+  try{
+    const N = Math.min(12, coordsLonLat.length);
+    if(N < 2) return null;
+    const idxs = Array.from({length:N}, (_,i) => Math.round(i*(coordsLonLat.length-1)/(N-1)));
+    const pts = idxs.map(i => coordsLonLat[i]);
+    const lats = pts.map(p=>p[1]).join(',');
+    const lons = pts.map(p=>p[0]).join(',');
+    const url = `${ELEVATION_URL}?latitude=${lats}&longitude=${lons}`;
+    const res = await fetch(url, {cache:'no-store'});
+    if(!res.ok) throw new Error('elevation ' + res.status);
+    const data = await res.json();
+    return (data.elevation && data.elevation.length > 1) ? data.elevation : null;
+  } catch(e){
+    return null;
+  }
+}
+
+function profileStats(elevations){
+  let up=0, down=0;
+  for(let i=1;i<elevations.length;i++){
+    const d = elevations[i]-elevations[i-1];
+    if(d>0) up+=d; else down += -d;
+  }
+  return { up: Math.round(up), down: Math.round(down) };
+}
+
+function elevSparkline(elevs){
+  const w = 320, h = 46, pad = 4;
+  const min = Math.min(...elevs), max = Math.max(...elevs);
+  const range = Math.max(1, max-min);
+  const step = (w - pad*2) / (elevs.length-1);
+  const pts = elevs.map((e,i) => {
+    const x = pad + i*step;
+    const y = h - pad - ((e-min)/range) * (h - pad*2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none" style="display:block; margin-top:8px;">
+    <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+
+function renderElevationProfile(elevs){
+  const aller = profileStats(elevs);
+  const retour = { up: aller.down, down: aller.up };
+  const warn = retour.up >= 15;
+  const text = warn
+    ? `${ic('uphill')} Retour : environ <b>${retour.up} m</b> de montée cumulée (${retour.down} m de descente) — vérifie qu'il te reste un électrique avant de partir.`
+    : (retour.down - retour.up >= 15
+        ? `${ic('downhill')} Bonne nouvelle : le retour vers Tabareau est plutôt en descente (~${retour.down - retour.up} m net).`
+        : `${ic('flat')} Trajet aller-retour globalement plat (~${aller.up} m de montée / ${aller.down} m de descente à l'aller).`);
+  return `<div class="elev-note" style="flex-direction:column; align-items:stretch;">
+    <div style="display:flex; align-items:flex-start; gap:7px;">${text}</div>
+    ${elevSparkline(elevs)}
+  </div>`;
+}
+
+function elevationNote(delta){
+  if(delta === null) return '';
+  if(delta >= 15) return `${ic('uphill')} Le retour grimpe d'environ ${delta} m (Tabareau est en haut de la Croix-Rousse) — vérifie qu'il te reste un électrique avant de partir.`;
+  if(delta <= -15) return `${ic('downhill')} Bonne nouvelle : le retour vers Tabareau est plutôt en descente (~${Math.abs(delta)} m).`;
+  return `${ic('flat')} Trajet globalement plat, peu de dénivelé (~${Math.abs(delta)} m).`;
+}
+
 function drawDestination(lat, lon, label){
   routeLayer.clearLayers();
   const destMarker = L.circleMarker([lat, lon], {
@@ -603,12 +784,62 @@ function drawRouteLine(coordsLonLat, dashed){
   return line;
 }
 
-function elevationNote(delta){
-  if(delta === null) return '';
-  if(delta >= 15) return `${ic('uphill')} Le retour grimpe d'environ ${delta} m (Tabareau est en haut de la Croix-Rousse) — vérifie qu'il te reste un électrique avant de partir.`;
-  if(delta <= -15) return `${ic('downhill')} Bonne nouvelle : le retour vers Tabareau est plutôt en descente (~${Math.abs(delta)} m).`;
-  return `${ic('flat')} Trajet globalement plat, peu de dénivelé (~${Math.abs(delta)} m).`;
+// --- Destinations favorites / fréquentes (localStorage) ---
+function loadDestinations(){
+  try{ return JSON.parse(localStorage.getItem(FAV_KEY)) || []; }catch(e){ return []; }
 }
+function saveDestinations(list){
+  try{ localStorage.setItem(FAV_KEY, JSON.stringify(list)); }catch(e){}
+}
+function sortDestinations(list){
+  list.sort((a,b) => (b.pinned - a.pinned) || (b.count - a.count));
+  return list;
+}
+function recordDestination(label, lat, lon){
+  let list = loadDestinations();
+  const existing = list.find(d => d.label === label);
+  if(existing){ existing.count = (existing.count||1) + 1; existing.lat = lat; existing.lon = lon; }
+  else { list.push({ label, lat, lon, count:1, pinned:false }); }
+  list = sortDestinations(list).slice(0, 8);
+  saveDestinations(list);
+  renderDestinationChips();
+}
+function togglePin(label){
+  const list = loadDestinations();
+  const d = list.find(x=>x.label===label);
+  if(d) d.pinned = !d.pinned;
+  saveDestinations(sortDestinations(list));
+  renderDestinationChips();
+}
+function removeDestination(label){
+  const list = loadDestinations().filter(d=>d.label!==label);
+  saveDestinations(list);
+  renderDestinationChips();
+}
+function renderDestinationChips(){
+  const el = document.getElementById('favChips');
+  const list = loadDestinations();
+  if(!list.length){ el.innerHTML = ''; el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  el.innerHTML = list.map((d,i) => `
+    <span class="fav-chip" data-idx="${i}">
+      <button class="fav-chip-main" data-action="go">${d.pinned ? ic('star') : ''} ${escapeHtml(d.label.split(',')[0])}</button>
+      <button class="fav-chip-pin ${d.pinned ? 'pinned' : ''}" data-action="pin" title="${d.pinned ? 'Désépingler' : 'Épingler'}">${ic('star')}</button>
+      <button class="fav-chip-remove" data-action="remove" title="Retirer">×</button>
+    </span>`).join('');
+}
+document.getElementById('favChips').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-action]');
+  if(!btn) return;
+  const chip = btn.closest('.fav-chip');
+  const idx = Number(chip.dataset.idx);
+  const list = loadDestinations();
+  const d = list[idx];
+  if(!d) return;
+  if(btn.dataset.action === 'go') estimateTripFor(d.label, d.lat, d.lon);
+  else if(btn.dataset.action === 'pin') togglePin(d.label);
+  else if(btn.dataset.action === 'remove') removeDestination(d.label);
+});
 
 async function estimateTrip(){
   const q = document.getElementById('destInput').value.trim();
@@ -627,10 +858,26 @@ async function estimateTrip(){
     const feat = data.features[0];
     const [lon, lat] = feat.geometry.coordinates;
     const label = feat.properties.label;
+    await runTrip(label, lat, lon);
+  } catch(e){
+    resEl.innerHTML = `<p class="err">Erreur : ${e.message}</p>`;
+  }
+}
+
+async function estimateTripFor(label, lat, lon){
+  document.getElementById('destInput').value = label;
+  await runTrip(label, lat, lon);
+}
+
+async function runTrip(label, lat, lon){
+  const resEl = document.getElementById('tripResult');
+  resEl.innerHTML = '<p class="muted" style="margin-top:14px;">Calcul de l\'itinéraire…</p>';
+  try{
     drawDestination(lat, lon, label);
+    recordDestination(label, lat, lon);
 
     const speedKmh = 14;
-    let routeKm, oneWayMin, routeNote, bounds;
+    let routeKm, oneWayMin, routeNote, bounds, elevHtml;
 
     try{
       const route = await fetchRoute(TABAREAU.lat, TABAREAU.lon, lat, lon);
@@ -639,6 +886,9 @@ async function estimateTrip(){
       const line = drawRouteLine(route.geometry.coordinates, false);
       bounds = line.getBounds();
       routeNote = "Itinéraire calculé sur le réseau routier réel (pas forcément optimisé pistes cyclables).";
+
+      const elevs = await fetchElevationProfile(route.geometry.coordinates);
+      elevHtml = elevs ? renderElevationProfile(elevs) : `<div class="elev-note">${elevationNote(await fetchElevationDelta(lat, lon))}</div>`;
     } catch(routeErr){
       const straightKm = haversine(TABAREAU.lat, TABAREAU.lon, lat, lon) / 1000;
       routeKm = straightKm * 1.3;
@@ -646,22 +896,23 @@ async function estimateTrip(){
       const line = drawRouteLine([[TABAREAU.lon, TABAREAU.lat],[lon, lat]], true);
       bounds = line.getBounds();
       routeNote = "Service d'itinéraire indisponible : ligne à vol d'oiseau affichée en pointillés (estimation approximative).";
+      elevHtml = `<div class="elev-note">${elevationNote(await fetchElevationDelta(lat, lon))}</div>`;
     }
 
-    map.fitBounds(bounds.pad(0.25));
+    if(map){ map.invalidateSize(); map.fitBounds(bounds.pad(0.25)); }
 
-    const elevDelta = await fetchElevationDelta(lat, lon);
     const roundTripMin = oneWayMin * 2;
     resEl.innerHTML = `
       <div class="result">
-        <div class="big">${ic('pin')} ${label}</div>
+        <div class="big">${ic('pin')} ${escapeHtml(label)}</div>
         <div>~${routeKm.toFixed(1)} km depuis Tabareau · <b>~${oneWayMin} min</b> à l'aller à vélo</div>
         <div class="muted" style="margin-top:6px;">
           Aller-retour : environ <b>${roundTripMin} min</b> de trajet cumulé (hors temps sur place).
           Les disponibilités à Tabareau peuvent avoir changé d'ici là — pense à réactualiser avant de repartir et avant de rentrer.
         </div>
-        <div class="elev-note" style="margin-top:6px;">${elevationNote(elevDelta)}</div>
+        <div style="margin-top:6px;">${elevHtml}</div>
         <div class="routeNote">${routeNote}</div>
+        <button class="btn-ghost" style="margin-top:12px;" onclick="showTab('carte')">${ic('map')} Voir sur la carte</button>
       </div>`;
   } catch(e){
     resEl.innerHTML = `<p class="err">Erreur : ${e.message}</p>`;
@@ -672,10 +923,84 @@ document.getElementById('destInput').addEventListener('keydown', e => {
   if(e.key === 'Enter') estimateTrip();
 });
 
+// --- Tendances : historique collecté automatiquement (GitHub Action) ---
+async function loadHistory(){
+  try{
+    const res = await fetch(HISTORY_URL, {cache:'no-store'});
+    if(!res.ok) return [];
+    const text = await res.text();
+    return text.split('\n').filter(Boolean).map(l => {
+      try{ return JSON.parse(l); }catch(e){ return null; }
+    }).filter(Boolean);
+  }catch(e){ return []; }
+}
+
+function hourBuckets(rows){
+  const buckets = Array.from({length:24}, () => ({ sumElec:0, sumDocks:0, n:0 }));
+  for(const r of rows){
+    if(typeof r.t !== 'number') continue;
+    const h = new Date(r.t * 1000).getHours();
+    buckets[h].sumElec += r.elec || 0;
+    buckets[h].sumDocks += (r.docks || 0);
+    buckets[h].n++;
+  }
+  return buckets.map(b => b.n ? { elec: b.sumElec/b.n, docks: b.sumDocks/b.n, n: b.n } : null);
+}
+
+let trendsLoaded = false;
+async function renderTrends(){
+  const el = document.getElementById('trendsBody');
+  if(trendsLoaded) return;
+  el.innerHTML = '<p class="muted">Chargement de l’historique…</p>';
+  const rows = await loadHistory();
+  if(rows.length < 50){
+    el.innerHTML = `
+      <div class="result">
+        <div class="big">${ic('chart')} Historique en cours de constitution</div>
+        <p class="muted" style="margin:0;">
+          Un relevé de la station Tabareau est enregistré automatiquement toutes les 15 minutes.
+          Les tendances horaires (ex. "généralement vide vers 8h30") apparaîtront ici une fois assez de données collectées — reviens dans quelques jours.
+        </p>
+      </div>`;
+    return;
+  }
+  trendsLoaded = true;
+  const buckets = hourBuckets(rows);
+  const maxElec = Math.max(1, ...buckets.filter(Boolean).map(b=>b.elec));
+  const bars = buckets.map((b, h) => {
+    const height = b ? Math.max(4, Math.round((b.elec/maxElec)*100)) : 0;
+    const lvl = b ? level(Math.round(b.elec)) : 'ok';
+    return `<div class="trend-col" title="${h}h — ${b ? b.elec.toFixed(1) : '—'} électrique(s) en moyenne">
+      <div class="trend-bar-track"><div class="trend-bar ${lvl}-bg" style="height:${height}%;"></div></div>
+      <span class="trend-h">${h % 3 === 0 ? h+'h' : ''}</span>
+    </div>`;
+  }).join('');
+
+  let worstHour = null, worstVal = Infinity;
+  buckets.forEach((b,h) => { if(b && b.elec < worstVal){ worstVal = b.elec; worstHour = h; } });
+
+  el.innerHTML = `
+    <div class="panel-tag" style="margin-bottom:10px;">Moyenne de vélos électriques disponibles à Tabareau, par heure (sur ${rows.length} relevés)</div>
+    <div class="trend-chart">${bars}</div>
+    ${worstHour !== null ? `<p class="muted" style="margin-top:14px;">${ic('alert')} En moyenne, c'est vers <b>${worstHour}h</b> qu'il reste le moins de vélos électriques (~${worstVal.toFixed(1)}).</p>` : ''}
+  `;
+}
+
+function registerServiceWorker(){
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    });
+  }
+}
+
 applyStaticIcons();
 initMap();
+renderDestinationChips();
 loadAll();
 setInterval(loadAll, 60000);
+showTab(localStorage.getItem(TAB_KEY) || 'accueil');
+registerServiceWorker();
 </script>
 </body>
 </html>
