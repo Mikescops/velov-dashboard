@@ -32,7 +32,7 @@ jobs:
         run: |
           git config user.name "velov-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add data/history.jsonl
+          git add data/history.jsonl data/history-hourly.jsonl
           if git diff --cached --quiet; then
             echo "Rien à committer."
           else

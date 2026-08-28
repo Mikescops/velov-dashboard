@@ -14,11 +14,13 @@ Page 100 % statique — un seul fichier `index.html`, sans build, sans backend, 
   - **Accueil** — disponibilité de Tabareau et des stations de secours à proximité.
   - **Carte** — carte interactive (Leaflet / OpenStreetMap), un marqueur par station coloré selon son état.
   - **Itinéraire** — planificateur de trajet avec destinations récentes/favorites.
-  - **Tendances** — disponibilité moyenne par heure, calculée sur l'historique collecté automatiquement.
+  - **Tendances** — disponibilité moyenne par heure pour Tabareau et chaque station de secours, filtrable semaine/week-end, avec prévision à +1h/+2h/+3h et export CSV.
 - **Stations de secours à proximité**, choisies volontairement à la même altitude que Tabareau pour ne jamais imposer une côte en plus si tu dois te rabattre sur une autre station.
 - **Planificateur de trajet** avec profil de dénivelé complet (plusieurs points échantillonnés le long du tracé, pas juste départ/arrivée) et une petite courbe d'altitude, pour savoir si le retour grimpe.
 - **Destinations récentes** : les lieux recherchés sont mémorisés (localStorage) et réapparaissent en un clic ; possibilité d'épingler tes trajets fréquents pour les garder en haut de la liste.
-- **Tendances horaires** : un historique (collecté automatiquement toutes les 15 minutes par une GitHub Action, voir plus bas) permet d'afficher la disponibilité moyenne par heure et de repérer les créneaux à éviter.
+- **Tendances horaires par station** : un historique (collecté automatiquement toutes les 15 minutes par une GitHub Action pour Tabareau et les 4 stations de secours) permet d'afficher, station par station, la disponibilité moyenne par heure — avec un filtre "tous les jours / semaine / week-end" — et de repérer les créneaux à éviter.
+- **Prévision à court terme** : à partir de ce même historique, une estimation "habituellement ~X à cette heure" apparaît sur l'Accueil, et un mini-forecast à +1h/+2h/+3h dans l'onglet Tendances (moyenne historique du créneau, pas une garantie).
+- **Export des données brutes** : bouton "Exporter en CSV" dans l'onglet Tendances, et liens directs vers les fichiers JSONL sources, pour qui veut analyser l'historique ailleurs.
 - **Résilience hors ligne** : les dernières données reçues sont gardées en cache local ; si le réseau ou l'API est indisponible, le tableau de bord reste utilisable et indique l'ancienneté des données affichées.
 - **Installable (PWA)** : "Ajouter à l'écran d'accueil" sur iOS/Android/desktop pour l'ouvrir en plein écran comme une vraie app.
 - **Météo locale** : température et alerte pluie sur les prochaines heures.
@@ -40,9 +42,16 @@ Aucune n'exige de clé API ; toutes sont interrogées directement depuis le navi
 
 ## Historique et tendances
 
-Le fichier [`data/history.jsonl`](data/history.jsonl) contient un relevé de la station Tabareau par ligne (`{"t":epoch,"elec":n,"meca":n,"docks":n}`). Il est alimenté automatiquement par [`.github/workflows/collect-data.yml`](.github/workflows/collect-data.yml), qui tourne toutes les 15 minutes, appelle [`scripts/collect.py`](scripts/collect.py) et committe le résultat. L'historique de plus de 120 jours est purgé automatiquement pour que le fichier reste léger.
+Deux fichiers, jamais purgés (seulement résumés) :
 
-Pour que la collecte fonctionne sur ton dépôt : **Settings → Actions → General → Workflow permissions**, choisir *Read and write permissions* (nécessaire pour que le workflow puisse committer). Le premier relevé n'apparaît qu'après le premier déclenchement du workflow ; l'onglet Tendances affiche un message d'attente tant qu'il n'y a pas assez de données (au moins 50 relevés, soit un peu plus de 12h).
+| Fichier | Contenu | Portée |
+|---|---|---|
+| [`data/history.jsonl`](data/history.jsonl) | Détail brut : un relevé par station toutes les 15 min (`{"t":epoch,"id":station_id,"elec":n,"meca":n,"docks":n}`) | Fenêtre glissante de 30 jours |
+| [`data/history-hourly.jsonl`](data/history-hourly.jsonl) | Résumé : une moyenne par station/date/heure (`{"date":"AAAA-MM-JJ","hour":h,"id":station_id,"elec":moyenne,"docks":moyenne,"n":nb_relevés}`) | Illimitée dans le temps |
+
+Les deux sont alimentés par [`.github/workflows/collect-data.yml`](.github/workflows/collect-data.yml) (toutes les 15 min, pour Tabareau **et** les 4 stations de secours) via [`scripts/collect.py`](scripts/collect.py) : les relevés de plus de 30 jours ne sont jamais supprimés, ils sont résumés en moyenne horaire et déplacés dans le fichier "hourly" — l'historique complet reste donc consultable indéfiniment, sans que le fichier détaillé ne grossisse sans limite (environ 5-6 Ko/jour pour le résumé, contre plusieurs dizaines de Ko/jour en détail brut).
+
+Pour que la collecte fonctionne sur ton dépôt : **Settings → Actions → General → Workflow permissions**, choisir *Read and write permissions* (nécessaire pour que le workflow puisse committer). Le premier relevé n'apparaît qu'après le premier déclenchement du workflow — la toute première exécution programmée (cron) d'un workflow fraîchement ajouté peut mettre jusqu'à une heure à démarrer côté GitHub, même si un déclenchement manuel ("Run workflow" dans l'onglet Actions) fonctionne immédiatement. L'onglet Tendances affiche un message d'attente tant qu'il n'y a pas assez de données (au moins 50 relevés au total, tous fichiers confondus).
 
 ## Installer l'app (PWA)
 
@@ -55,7 +64,7 @@ Tout se configure en haut du `<script>` dans `index.html` :
 - `TABAREAU` — la station suivie en priorité (id, nom, coordonnées, capacité).
 - `NEARBY` — la liste des stations de secours affichées (id, nom, adresse, coordonnées, capacité, distance).
 
-L'identifiant de station (`station_id`) se trouve dans le flux [`station_information.json`](https://download.data.grandlyon.com/files/rdata/jcd_jcdecaux.jcdvelov/station_information.json) du portail Grand Lyon. Pour suivre une autre station dans `scripts/collect.py`, changer la constante `STATION_ID`.
+L'identifiant de station (`station_id`) se trouve dans le flux [`station_information.json`](https://download.data.grandlyon.com/files/rdata/jcd_jcdecaux.jcdvelov/station_information.json) du portail Grand Lyon. Pour changer les stations collectées par l'historique, mettre à jour la liste `STATION_IDS` dans `scripts/collect.py` (elle doit rester alignée avec `TABAREAU`/`NEARBY` dans `index.html`).
 
 ## Licence
 

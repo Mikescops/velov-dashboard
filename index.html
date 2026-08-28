@@ -139,6 +139,8 @@
   h2{font-size:1.05rem; margin:0; font-weight:700; letter-spacing:-0.01em; display:flex; align-items:center; gap:8px;}
   h2 svg{width:18px; height:18px; color:var(--accent); flex-shrink:0;}
   .panel-tag{font-size:0.8rem; color:var(--muted); font-weight:500;}
+  .panel-tag svg{width:13px; height:13px; vertical-align:-2px;}
+  .muted svg{width:13px; height:13px; vertical-align:-2px;}
   #map{
     width:100%; height:clamp(460px, 68vh, 720px); border-radius:14px; border:1px solid var(--border);
     background:var(--card2);
@@ -203,11 +205,23 @@
   .fav-chip:hover .fav-chip-remove{color:var(--red);}
 
   /* ---------- trends ---------- */
+  .trend-controls{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:16px;}
+  .trend-select{
+    padding:9px 14px; border-radius:12px; border:1px solid var(--border);
+    background:var(--card2); color:var(--text); font-size:0.87rem; font-weight:500; font-family:inherit;
+  }
+  .segmented{display:inline-flex; gap:3px; background:var(--card2); border:1px solid var(--border); padding:3px; border-radius:12px;}
+  .segmented button{background:transparent; color:var(--muted); font-size:0.83rem; padding:7px 12px; border-radius:9px;}
+  .segmented button.active{background:var(--card); color:var(--text); box-shadow:var(--shadow);}
   .trend-chart{display:flex; align-items:flex-end; gap:4px; margin-top:6px;}
   .trend-col{flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; min-width:0;}
   .trend-bar-track{width:100%; height:150px; display:flex; align-items:flex-end;}
   .trend-bar{width:100%; border-radius:4px 4px 0 0; min-height:4px;}
   .trend-h{font-size:0.62rem; color:var(--muted);}
+  .forecast-row{display:flex; gap:10px; margin-top:20px; flex-wrap:wrap;}
+  .forecast-card{flex:1; min-width:84px; background:var(--card2); border:1px solid var(--border); border-radius:14px; padding:12px; text-align:center;}
+  .fc-label{font-size:0.75rem; color:var(--muted); margin-bottom:6px; font-weight:500;}
+  .fc-val{font-size:1.5rem; font-weight:800; letter-spacing:-0.02em;}
 
   .leaflet-popup-content{font-family:inherit; font-size:0.9rem;}
   .leaflet-popup-content-wrapper, .leaflet-popup-tip{background:var(--card); color:var(--text);}
@@ -299,6 +313,7 @@
         <span class="panel-tag">disponibilité moyenne par heure, collectée automatiquement</span>
       </div>
       <div id="trendsBody"></div>
+      <p class="routeNote" id="trendsDataLinks"></p>
     </div>
   </div>
 
@@ -355,6 +370,7 @@ const ROUTE_URL = 'https://router.project-osrm.org/route/v1/bike/';
 const WEATHER_URL = 'https://api.open-meteo.com/v1/forecast';
 const ELEVATION_URL = 'https://api.open-meteo.com/v1/elevation';
 const HISTORY_URL = './data/history.jsonl';
+const HOURLY_URL = './data/history-hourly.jsonl';
 const CACHE_KEY = 'velov_last_status';
 const FAV_KEY = 'velov_destinations';
 const TAB_KEY = 'velov_active_tab';
@@ -552,6 +568,7 @@ function renderKPIs(status, bestId, statusMap){
     <div class="kpi-num ${eLvl}-c">${elec}</div>
     <div class="bar"><div style="width:${pct(elec, TABAREAU.capacity)}%; background:${LEVEL_COLOR[eLvl]}"></div></div>
     <div class="kpi-sub">${meca > 0 ? `+ <b>${meca}</b> mécanique(s) en dépannage` : 'aucun mécanique en dépannage'} · <b>${total}</b> vélo(s) au total</div>
+    <div class="kpi-sub" id="usualNote"></div>
   `;
 
   // Docks
@@ -637,6 +654,7 @@ function renderFromStatusMap(statusMap){
   renderKPIs(tStatus, bestId, statusMap);
   renderNearby(statusMap, bestId);
   renderMapStations(statusMap, bestId);
+  renderUsualNote();
 }
 
 async function loadAll(){
@@ -924,9 +942,15 @@ document.getElementById('destInput').addEventListener('keydown', e => {
 });
 
 // --- Tendances : historique collecté automatiquement (GitHub Action) ---
-async function loadHistory(){
+// data/history.jsonl        : détail brut, ~30 derniers jours, un relevé/15min/station.
+// data/history-hourly.jsonl : au-delà, résumé en moyenne par station/date/heure (jamais supprimé).
+const ALL_STATIONS = [TABAREAU, ...NEARBY];
+let HISTORY_CACHE = null;
+const trendState = { stationId: TABAREAU.id, group: 'all' };
+
+async function loadJsonlFile(url){
   try{
-    const res = await fetch(HISTORY_URL, {cache:'no-store'});
+    const res = await fetch(url, {cache:'no-store'});
     if(!res.ok) return [];
     const text = await res.text();
     return text.split('\n').filter(Boolean).map(l => {
@@ -935,55 +959,188 @@ async function loadHistory(){
   }catch(e){ return []; }
 }
 
-function hourBuckets(rows){
-  const buckets = Array.from({length:24}, () => ({ sumElec:0, sumDocks:0, n:0 }));
-  for(const r of rows){
-    if(typeof r.t !== 'number') continue;
-    const h = new Date(r.t * 1000).getHours();
-    buckets[h].sumElec += r.elec || 0;
-    buckets[h].sumDocks += (r.docks || 0);
-    buckets[h].n++;
-  }
-  return buckets.map(b => b.n ? { elec: b.sumElec/b.n, docks: b.sumDocks/b.n, n: b.n } : null);
+async function ensureHistoryLoaded(){
+  if(HISTORY_CACHE) return HISTORY_CACHE;
+  const [rawRows, hourlyRows] = await Promise.all([loadJsonlFile(HISTORY_URL), loadJsonlFile(HOURLY_URL)]);
+  const raw = rawRows.map(r => ({ ...r, id: r.id || TABAREAU.id })); // compat anciens relevés sans id
+  HISTORY_CACHE = { raw, hourly: hourlyRows };
+  return HISTORY_CACHE;
 }
 
-let trendsLoaded = false;
-async function renderTrends(){
-  const el = document.getElementById('trendsBody');
-  if(trendsLoaded) return;
-  el.innerHTML = '<p class="muted">Chargement de l’historique…</p>';
-  const rows = await loadHistory();
-  if(rows.length < 50){
-    el.innerHTML = `
-      <div class="result">
-        <div class="big">${ic('chart')} Historique en cours de constitution</div>
-        <p class="muted" style="margin:0;">
-          Un relevé de la station Tabareau est enregistré automatiquement toutes les 15 minutes.
-          Les tendances horaires (ex. "généralement vide vers 8h30") apparaîtront ici une fois assez de données collectées — reviens dans quelques jours.
-        </p>
-      </div>`;
-    return;
+function isWeekendDate(d){ const day = d.getDay(); return day === 0 || day === 6; }
+function matchesGroup(isWknd, group){
+  if(group === 'weekday') return !isWknd;
+  if(group === 'weekend') return isWknd;
+  return true;
+}
+
+function bucketRawRows(rows, stationId, group){
+  const buckets = Array.from({length:24}, () => ({ sum:0, n:0 }));
+  for(const r of rows){
+    if(r.id !== stationId) continue;
+    const d = new Date(r.t * 1000);
+    if(!matchesGroup(isWeekendDate(d), group)) continue;
+    buckets[d.getHours()].sum += r.elec || 0;
+    buckets[d.getHours()].n += 1;
   }
-  trendsLoaded = true;
-  const buckets = hourBuckets(rows);
-  const maxElec = Math.max(1, ...buckets.filter(Boolean).map(b=>b.elec));
+  return buckets;
+}
+
+function bucketHourlyRows(rows, stationId, group){
+  const buckets = Array.from({length:24}, () => ({ sum:0, n:0 }));
+  for(const r of rows){
+    if(r.id !== stationId) continue;
+    const d = new Date(r.date + 'T12:00:00'); // midi : évite les ambiguïtés DST pour déterminer le jour de la semaine
+    if(!matchesGroup(isWeekendDate(d), group)) continue;
+    buckets[r.hour].sum += (r.elec || 0) * (r.n || 1);
+    buckets[r.hour].n += (r.n || 1);
+  }
+  return buckets;
+}
+
+function mergeBuckets(a, b){
+  return a.map((x,i) => ({ sum: x.sum + b[i].sum, n: x.n + b[i].n }));
+}
+
+function stationLabel(id){
+  const st = ALL_STATIONS.find(s => s.id === id);
+  return id === TABAREAU.id ? 'Tabareau (chez toi)' : (st ? st.name : id);
+}
+
+function populateTrendStationSelect(){
+  const sel = document.getElementById('trendStation');
+  if(!sel) return;
+  sel.innerHTML = ALL_STATIONS.map(s => `<option value="${s.id}">${escapeHtml(stationLabel(s.id))}</option>`).join('');
+  sel.value = trendState.stationId;
+}
+
+function renderForecastCards(buckets){
+  const now = new Date();
+  const horizons = [0,1,2,3];
+  const cards = horizons.map(k => {
+    const h = (now.getHours() + k) % 24;
+    const label = k === 0 ? 'Maintenant' : `+${k}h`;
+    const b = buckets[h];
+    if(!b || b.n < 3){
+      return `<div class="forecast-card"><div class="fc-label">${label}</div><div class="fc-val muted">—</div></div>`;
+    }
+    const avg = b.sum / b.n;
+    const lvl = level(Math.round(avg));
+    return `<div class="forecast-card"><div class="fc-label">${label}</div><div class="fc-val ${lvl}-c">${avg.toFixed(1)}</div></div>`;
+  }).join('');
+  return `
+    <div class="panel-tag" style="margin-top:20px;">${ic('chart')} Prévision (moyenne historique pour ce créneau, pas une garantie)</div>
+    <div class="forecast-row">${cards}</div>`;
+}
+
+function exportHistoryCSV(){
+  if(!HISTORY_CACHE) return;
+  const lines = ['type,epoch,date,hour,station_id,elec,meca,docks,n'];
+  for(const r of HISTORY_CACHE.raw){
+    lines.push(`raw,${r.t},,,${r.id},${r.elec},${r.meca ?? ''},${r.docks},1`);
+  }
+  for(const r of HISTORY_CACHE.hourly){
+    lines.push(`hourly,,${r.date},${r.hour},${r.id},${r.elec},,${r.docks},${r.n}`);
+  }
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'velov-tabareau-historique.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+function wireTrendControls(){
+  const sel = document.getElementById('trendStation');
+  if(sel) sel.onchange = () => { trendState.stationId = sel.value; renderTrendsBody(); };
+  document.querySelectorAll('#trendGroup button').forEach(btn => {
+    btn.onclick = () => { trendState.group = btn.dataset.group; renderTrendsBody(); };
+  });
+  const exportBtn = document.getElementById('exportCsvBtn');
+  if(exportBtn) exportBtn.onclick = exportHistoryCSV;
+}
+
+function renderTrendsBody(){
+  const el = document.getElementById('trendsBody');
+  const buckets = mergeBuckets(
+    bucketRawRows(HISTORY_CACHE.raw, trendState.stationId, trendState.group),
+    bucketHourlyRows(HISTORY_CACHE.hourly, trendState.stationId, trendState.group)
+  );
+  const totalForStation = buckets.reduce((s,b) => s + b.n, 0);
+  const maxElec = Math.max(1, ...buckets.filter(b=>b.n).map(b=>b.sum/b.n));
   const bars = buckets.map((b, h) => {
-    const height = b ? Math.max(4, Math.round((b.elec/maxElec)*100)) : 0;
-    const lvl = b ? level(Math.round(b.elec)) : 'ok';
-    return `<div class="trend-col" title="${h}h — ${b ? b.elec.toFixed(1) : '—'} électrique(s) en moyenne">
+    const height = b.n ? Math.max(4, Math.round(((b.sum/b.n)/maxElec)*100)) : 0;
+    const lvl = b.n ? level(Math.round(b.sum/b.n)) : 'ok';
+    const title = b.n ? `${h}h — ${(b.sum/b.n).toFixed(1)} électrique(s) en moyenne (${b.n} relevés)` : `${h}h — pas de donnée`;
+    return `<div class="trend-col" title="${title}">
       <div class="trend-bar-track"><div class="trend-bar ${lvl}-bg" style="height:${height}%;"></div></div>
       <span class="trend-h">${h % 3 === 0 ? h+'h' : ''}</span>
     </div>`;
   }).join('');
 
   let worstHour = null, worstVal = Infinity;
-  buckets.forEach((b,h) => { if(b && b.elec < worstVal){ worstVal = b.elec; worstHour = h; } });
+  buckets.forEach((b,h) => { if(b.n && (b.sum/b.n) < worstVal){ worstVal = b.sum/b.n; worstHour = h; } });
+
+  const groupLabel = { all:'tous les jours', weekday:'jours de semaine', weekend:'week-end' }[trendState.group];
 
   el.innerHTML = `
-    <div class="panel-tag" style="margin-bottom:10px;">Moyenne de vélos électriques disponibles à Tabareau, par heure (sur ${rows.length} relevés)</div>
+    <div class="trend-controls">
+      <select class="trend-select" id="trendStation"></select>
+      <div class="segmented" id="trendGroup">
+        <button data-group="all" class="${trendState.group==='all'?'active':''}">Tous les jours</button>
+        <button data-group="weekday" class="${trendState.group==='weekday'?'active':''}">Semaine</button>
+        <button data-group="weekend" class="${trendState.group==='weekend'?'active':''}">Week-end</button>
+      </div>
+      <button class="btn-ghost" id="exportCsvBtn" style="margin-left:auto;">${ic('chart')} Exporter en CSV</button>
+    </div>
+    <div class="panel-tag" style="margin-bottom:10px;">Moyenne de vélos électriques disponibles à ${escapeHtml(stationLabel(trendState.stationId))}, par heure — ${groupLabel} (${totalForStation} relevé(s) sur ce créneau)</div>
     <div class="trend-chart">${bars}</div>
     ${worstHour !== null ? `<p class="muted" style="margin-top:14px;">${ic('alert')} En moyenne, c'est vers <b>${worstHour}h</b> qu'il reste le moins de vélos électriques (~${worstVal.toFixed(1)}).</p>` : ''}
+    ${renderForecastCards(buckets)}
   `;
+  populateTrendStationSelect();
+  wireTrendControls();
+  const linksEl = document.getElementById('trendsDataLinks');
+  if(linksEl){
+    linksEl.innerHTML = `Données brutes : <a href="${HISTORY_URL}" target="_blank">history.jsonl</a> · résumé long terme : <a href="${HOURLY_URL}" target="_blank">history-hourly.jsonl</a>`;
+  }
+}
+
+async function renderTrends(){
+  const el = document.getElementById('trendsBody');
+  el.innerHTML = '<p class="muted">Chargement de l’historique…</p>';
+  await ensureHistoryLoaded();
+  const totalRows = HISTORY_CACHE.raw.length + HISTORY_CACHE.hourly.reduce((s,r) => s + r.n, 0);
+  if(totalRows < 50){
+    el.innerHTML = `
+      <div class="result">
+        <div class="big">${ic('chart')} Historique en cours de constitution</div>
+        <p class="muted" style="margin:0;">
+          Un relevé de chaque station suivie est enregistré automatiquement toutes les 15 minutes.
+          Les tendances horaires (ex. "généralement vide vers 8h30") apparaîtront ici une fois assez de données collectées — reviens dans quelques jours.
+        </p>
+      </div>`;
+    return;
+  }
+  renderTrendsBody();
+  renderUsualNote();
+}
+
+function renderUsualNote(){
+  const el = document.getElementById('usualNote');
+  if(!el) return;
+  if(!HISTORY_CACHE){
+    ensureHistoryLoaded().then(() => renderUsualNote());
+    return;
+  }
+  const group = isWeekendDate(new Date()) ? 'weekend' : 'weekday';
+  const buckets = mergeBuckets(
+    bucketRawRows(HISTORY_CACHE.raw, TABAREAU.id, group),
+    bucketHourlyRows(HISTORY_CACHE.hourly, TABAREAU.id, group)
+  );
+  const b = buckets[new Date().getHours()];
+  if(!b || b.n < 4){ el.textContent = ''; return; }
+  el.innerHTML = `${ic('chart')} Habituellement <b>~${(b.sum/b.n).toFixed(1)}</b> à cette heure`;
 }
 
 function registerServiceWorker(){
@@ -1001,6 +1158,7 @@ loadAll();
 setInterval(loadAll, 60000);
 showTab(localStorage.getItem(TAB_KEY) || 'accueil');
 registerServiceWorker();
+ensureHistoryLoaded().then(renderUsualNote);
 </script>
 </body>
 </html>
