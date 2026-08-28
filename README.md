@@ -30,28 +30,6 @@ Aucune n'exige de clé API ; toutes sont interrogées directement depuis le navi
 
 > Le service d'itinéraire public (OSRM) ne propose pas de profil vélo dédié : le tracé suit le réseau routier général, pas forcément les pistes cyclables. Le dénivelé est une estimation basée sur un modèle numérique de terrain (résolution ~90 m).
 
-## Déploiement
-
-Le fichier `index.html` est autonome : il suffit de l'héberger tel quel sur n'importe quel hébergeur statique.
-
-### GitHub Pages
-
-```bash
-git remote add origin https://github.com/<ton-compte>/<ton-repo>.git
-git branch -M main
-git push -u origin main
-```
-
-Puis **Settings → Pages → Source: Deploy from a branch → Branch: main / (root)**. Le site est disponible à `https://<ton-compte>.github.io/<ton-repo>/` en quelques minutes.
-
-### Netlify Drop
-
-Glisser `index.html` sur [app.netlify.com/drop](https://app.netlify.com/drop) → URL générée instantanément, sans compte.
-
-### Cloudflare Pages
-
-Connecter le repo depuis le tableau de bord Cloudflare Pages, dossier de build = racine, pas de commande de build.
-
 ## Personnaliser pour une autre station
 
 Tout se configure en haut du `<script>` dans `index.html` :
