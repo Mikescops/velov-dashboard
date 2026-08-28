@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vélo'v Tabareau</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+<style>
+  :root{
+    --bg:#000000; --card:#1c1c1e; --card2:#2c2c2e; --text:#ffffff; --muted:#98989f;
+    --border:#38383a; --green:#30d158; --orange:#ff9f0a; --red:#ff453a; --accent:#0a84ff;
+    --star:#ffd60a; --shadow: 0 1px 2px rgba(0,0,0,0.5), 0 6px 20px rgba(0,0,0,0.3);
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --bg:#f2f2f7; --card:#ffffff; --card2:#f2f2f7; --text:#1c1c1e; --muted:#6e6e73;
+      --border:#e5e5ea; --green:#34c759; --orange:#ff9500; --red:#ff3b30; --accent:#007aff;
+      --star:#e8b100; --shadow: 0 1px 2px rgba(60,60,67,0.06), 0 6px 20px rgba(60,60,67,0.08);
+    }
+  }
+  *{box-sizing:border-box; -webkit-font-smoothing:antialiased;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    padding:22px clamp(16px, 2.4vw, 44px) 50px;
+    letter-spacing:-0.01em;
+  }
+  .wrap{max-width:1560px; margin:0 auto;}
+
+  /* ---------- header ---------- */
+  .topbar{display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:14px;}
+  h1{font-size:clamp(1.4rem, 1.1rem + 1.2vw, 1.9rem); margin:0 0 6px; font-weight:800; letter-spacing:-0.02em;}
+  .sub{color:var(--muted); font-size:0.95rem; margin:0;}
+  .chips{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
+  .chip{
+    display:inline-flex; align-items:center; gap:6px; background:var(--card2); border:1px solid var(--border);
+    color:var(--text); padding:6px 12px; border-radius:100px; font-size:0.83rem; font-weight:500;
+  }
+  .chip.muted{color:var(--muted); font-weight:400;}
+  .chip svg{width:14px; height:14px; flex-shrink:0;}
+  .toolbar{display:flex; align-items:center; gap:10px;}
+  #lastUpdate{color:var(--muted); font-size:0.83rem;}
+  button{
+    border:none; border-radius:12px; font-weight:600; cursor:pointer;
+    font-family:inherit; letter-spacing:-0.01em;
+  }
+  button:disabled{opacity:0.5; cursor:default;}
+  .btn-primary{background:var(--accent); color:#fff; padding:13px 20px; font-size:1rem; width:100%;}
+  .btn-ghost{
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    color:var(--accent); padding:10px 16px; font-size:0.9rem;
+    display:inline-flex; align-items:center; gap:6px;
+  }
+  .btn-ghost svg{width:15px; height:15px;}
+  .spin{display:inline-flex; transition:transform 0.5s ease;}
+  .spinning{animation:spin 0.8s linear infinite;}
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  /* ---------- banner ---------- */
+  .banner{
+    border-radius:20px; padding:20px 24px; margin-bottom:18px; border:1px solid var(--border);
+    background:var(--card); box-shadow:var(--shadow); display:flex; align-items:center; gap:16px;
+  }
+  .banner .icon-badge{
+    width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+  }
+  .banner .icon-badge svg{width:22px; height:22px;}
+  .banner .status{font-size:1.15rem; font-weight:700; margin:0 0 3px;}
+  .banner p{margin:0; font-size:0.95rem; color:var(--muted); line-height:1.5;}
+  .banner.ok .status{color:var(--green);}
+  .banner.warn .status{color:var(--orange);}
+  .banner.crit .status{color:var(--red);}
+
+  /* ---------- KPI dashboard row ---------- */
+  .kpi-row{display:grid; grid-template-columns:1.3fr 1fr 1fr; gap:16px; margin-bottom:20px;}
+  @media (max-width:900px){ .kpi-row{grid-template-columns:1fr;} }
+  .kpi{
+    background:var(--card); border:1px solid var(--border); border-radius:20px; padding:22px;
+    box-shadow:var(--shadow); position:relative; overflow:hidden;
+  }
+  .kpi-head{display:flex; align-items:center; gap:10px; margin-bottom:14px;}
+  .kpi-badge{
+    width:38px; height:38px; border-radius:11px; display:flex; align-items:center; justify-content:center;
+    font-size:1.05rem; font-weight:800; flex-shrink:0;
+  }
+  .kpi-badge svg{width:19px; height:19px;}
+  .kpi-title{font-size:0.88rem; font-weight:600; color:var(--muted);}
+  .kpi-num{font-size:3.1rem; font-weight:800; line-height:1; letter-spacing:-0.03em;}
+  .kpi.hero .kpi-num{font-size:3.6rem;}
+  .kpi-num .cap{font-size:1.3rem; font-weight:600; color:var(--muted); margin-left:6px;}
+  .kpi-sub{font-size:0.85rem; color:var(--muted); margin-top:10px;}
+  .kpi-sub b{color:var(--text); font-weight:600;}
+  .kpi-sub svg{width:12px; height:12px; vertical-align:-1px;}
+  .bar{height:7px; border-radius:100px; background:var(--card2); margin-top:14px; overflow:hidden;}
+  .bar > div{height:100%; border-radius:100px; transition:width 0.4s ease;}
+  .ok-c{color:var(--green);} .warn-c{color:var(--orange);} .crit-c{color:var(--red);}
+  .ok-bg{background:color-mix(in srgb, var(--green) 16%, transparent); color:var(--green);}
+  .warn-bg{background:color-mix(in srgb, var(--orange) 16%, transparent); color:var(--orange);}
+  .crit-bg{background:color-mix(in srgb, var(--red) 16%, transparent); color:var(--red);}
+  .neutral-bg{background:color-mix(in srgb, var(--accent) 14%, transparent); color:var(--accent);}
+  .kpi-alt-name{font-size:1.3rem; font-weight:700; margin-top:2px;}
+  .kpi-alt-empty{font-size:0.95rem; color:var(--muted); margin-top:8px;}
+
+  /* ---------- panels grid: map + list ---------- */
+  .panels{display:grid; grid-template-columns:1.5fr 1fr; gap:18px; margin-bottom:20px; align-items:stretch;}
+  @media (max-width:980px){ .panels{grid-template-columns:1fr;} }
+  .panel{
+    background:var(--card); border:1px solid var(--border); border-radius:20px; padding:20px;
+    box-shadow:var(--shadow); display:flex; flex-direction:column;
+  }
+  .panel-head{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:14px; gap:10px; flex-wrap:wrap;}
+  h2{font-size:1.05rem; margin:0; font-weight:700; letter-spacing:-0.01em; display:flex; align-items:center; gap:8px;}
+  h2 svg{width:18px; height:18px; color:var(--accent); flex-shrink:0;}
+  .panel-tag{font-size:0.8rem; color:var(--muted); font-weight:500;}
+  #map{
+    width:100%; height:clamp(420px, 56vh, 640px); border-radius:14px; border:1px solid var(--border);
+    background:var(--card2);
+  }
+  .legend{display:flex; gap:16px; margin-top:14px; font-size:0.82rem; color:var(--muted); flex-wrap:wrap;}
+  .legend span{display:inline-flex; align-items:center; gap:6px;}
+  .legend i{width:10px; height:10px; border-radius:50%; display:inline-block;}
+  .legend i.ok{background:var(--green);}
+  .legend i.warn{background:var(--orange);}
+  .legend i.crit{background:var(--red);}
+  .legend i.dest{background:var(--accent);}
+  .legend svg{width:13px; height:13px; color:var(--star);}
+
+  .stationlist{overflow-y:auto; max-height:clamp(420px, 56vh, 640px); margin:0 -6px; padding:0 6px;}
+  .stationline{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:14px 4px; border-bottom:1px solid var(--border); gap:12px;
+  }
+  .stationline:last-child{border-bottom:none;}
+  .stationline .name{font-weight:600; font-size:0.98rem; display:flex; align-items:center; gap:6px;}
+  .stationline .dist{color:var(--muted); font-size:0.8rem; display:flex; align-items:center; gap:5px; margin-top:3px;}
+  .stationline .dist svg{width:11px; height:11px; flex-shrink:0;}
+  .stationline .nums{display:flex; gap:10px; align-items:center; flex-shrink:0;}
+  .elecstat{display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:12px; font-weight:700; font-size:1.05rem;}
+  .elecstat svg{width:15px; height:15px;}
+  .elecstat .u{font-size:0.72rem; font-weight:500; opacity:0.75; margin-left:2px;}
+  .docksstat{font-size:0.82rem; color:var(--muted); white-space:nowrap; display:inline-flex; align-items:center; gap:4px;}
+  .docksstat svg{width:13px; height:13px;}
+  .star{color:var(--star); display:inline-flex;}
+  .star svg{width:15px; height:15px;}
+
+  /* ---------- trip planner ---------- */
+  .trip-input-row{display:flex; gap:10px; flex-wrap:wrap;}
+  .trip-input-row input{flex:1; min-width:220px;}
+  .trip-input-row button{width:auto; white-space:nowrap;}
+  input[type=text]{
+    padding:13px 16px; border-radius:12px; border:1px solid var(--border);
+    background:var(--card2); color:var(--text); font-size:1rem; font-family:inherit;
+  }
+  input[type=text]:focus{outline:2px solid var(--accent); outline-offset:1px;}
+  .result{margin-top:16px; padding:18px 20px; border-radius:16px; background:var(--card2); border:1px solid var(--border); font-size:0.95rem; line-height:1.6;}
+  .result .big{font-size:1.12rem; font-weight:700; margin-bottom:6px; display:flex; align-items:center; gap:7px;}
+  .result .big svg{width:16px; height:16px; color:var(--accent); flex-shrink:0;}
+  .muted{color:var(--muted);}
+  .err{color:var(--red); font-size:0.9rem; margin-top:10px;}
+  .routeNote{font-size:0.8rem; color:var(--muted); margin-top:10px;}
+  .elev-note{font-size:0.9rem; color:var(--muted); display:flex; align-items:flex-start; gap:7px;}
+  .elev-note svg{width:15px; height:15px; color:var(--accent); flex-shrink:0; margin-top:2px;}
+  a{color:var(--accent); text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  .footer{text-align:center; color:var(--muted); font-size:0.78rem; margin-top:28px; line-height:1.7;}
+
+  .leaflet-popup-content{font-family:inherit; font-size:0.9rem;}
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip{background:var(--card); color:var(--text);}
+  .stationLabel{
+    background:transparent; border:none; box-shadow:none; font-weight:700; font-size:0.78rem;
+    color:var(--text); text-shadow:0 0 3px var(--bg), 0 0 3px var(--bg), 0 0 3px var(--bg);
+  }
+  .stationLabel::before{display:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div>
+      <h1>🚲 Vélo'v — Place Tabareau</h1>
+      <p class="sub">Suivi en direct de ta station (API temps réel Métropole de Lyon)</p>
+      <div class="chips">
+        <span class="chip muted" id="freshness">Chargement…</span>
+        <span class="chip muted" id="weatherLine"></span>
+      </div>
+    </div>
+    <div class="toolbar">
+      <span id="lastUpdate"></span>
+      <button class="btn-ghost" id="refreshBtn" onclick="loadAll()"><span class="spin" id="refreshIcon"></span> Actualiser</button>
+    </div>
+  </div>
+
+  <div id="banner" class="banner"><p>Chargement des données…</p></div>
+
+  <div class="kpi-row">
+    <div class="kpi hero" id="kpiElec"></div>
+    <div class="kpi" id="kpiDocks"></div>
+    <div class="kpi" id="kpiAlt"></div>
+  </div>
+
+  <div class="panels">
+    <div class="panel">
+      <div class="panel-head">
+        <h2 id="mapTitle">Carte des stations</h2>
+        <span class="panel-tag">glisser pour déplacer · molette+Ctrl pour zoomer</span>
+      </div>
+      <div id="map"></div>
+      <div class="legend">
+        <span><i class="ok"></i>OK</span>
+        <span><i class="warn"></i>À surveiller</span>
+        <span><i class="crit"></i>Critique</span>
+        <span><i class="dest"></i>Destination</span>
+        <span id="legendStar">meilleure alternative</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2 id="nearbyTitle">À proximité</h2>
+        <span class="panel-tag">toutes sur le plateau, pas de côte en plus</span>
+      </div>
+      <div class="stationlist" id="nearby"></div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:18px;">
+    <div class="panel-head">
+      <h2 id="tripTitle">Où te rends-tu ?</h2>
+      <span class="panel-tag">itinéraire, temps de trajet &amp; dénivelé du retour</span>
+    </div>
+    <div class="trip-input-row">
+      <input type="text" id="destInput" placeholder="Ex : Bellecour, Part-Dieu, 12 rue de la République..." />
+      <button class="btn-primary" style="width:auto;" onclick="estimateTrip()">Tracer l'itinéraire</button>
+    </div>
+    <div id="tripResult"></div>
+  </div>
+
+  <p class="footer">
+    Source : <a href="https://data.grandlyon.com/portail/fr/jeux-de-donnees/stations-velo-v-metropole-lyon-disponibilites-temps-reel/api" target="_blank">GBFS Vélo'v — Métropole de Lyon</a> ·
+    Géocodage : <a href="https://adresse.data.gouv.fr/api-doc/adresse" target="_blank">Base Adresse Nationale</a> ·
+    Itinéraire : <a href="http://project-osrm.org/" target="_blank">OSRM</a> ·
+    Météo &amp; dénivelé : <a href="https://open-meteo.com/" target="_blank">Open-Meteo</a><br>
+    Carte © <a href="https://www.openstreetmap.org/copyright" target="_blank">contributeurs OpenStreetMap</a>. Le service d'itinéraire public ne dispose pas d'un profil vélo dédié. Le dénivelé est une estimation (modèle numérique de terrain, résolution ~90m).
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+// --- Stations connues (statiques : nom, position, capacité) ---
+const TABAREAU = { id:'4021', name:'TABAREAU', address:'Angle Bvd de la Croix-Rousse', lat:45.774061, lon:4.82516, capacity:10 };
+// Toutes choisies sur le même plateau que Tabareau (~245-259m d'altitude, comme Tabareau à 254m)
+// pour éviter de te faire remonter la côte de la Croix-Rousse si tu dois utiliser une station de secours.
+const NEARBY = [
+  { id:'4002', name:'MAIRIE DU 4E', address:'Devant la mairie du 4e', lat:45.774193, lon:4.827743, capacity:20, distM:201 },
+  { id:'4009', name:'JACQUARD / DENFERT-ROCHEREAU', address:'Rue Denfert-Rochereau', lat:45.77591, lon:4.825394, capacity:14, distM:206 },
+  { id:'4006', name:'PHILIPPE DE LASSALLE', address:"Angle rue Anselme, face à l'IUFM", lat:45.773358, lon:4.821234, capacity:23, distM:314 },
+  { id:'4017', name:'PLACE DES TAPIS', address:'Angle Bvd de la Croix-Rousse', lat:45.776002, lon:4.829628, capacity:17, distM:410 },
+];
+
+// --- Icônes (SVG traits fins, dans l'esprit SF Symbols — pas d'emoji) ---
+const ICON = {
+  bolt: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.9 2.3 4.5 13.6a.9.9 0 0 0 .7 1.4h5l-1 6.6a.9.9 0 0 0 1.6.6l8.4-11.3a.9.9 0 0 0-.7-1.4h-5l1-6.6a.9.9 0 0 0-1.6-.6z"/></svg>',
+  park: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2.3" y="2.3" width="19.4" height="19.4" rx="6"/><text x="12" y="16.3" text-anchor="middle" font-size="11.5" font-weight="800" fill="currentColor" stroke="none" font-family="-apple-system,sans-serif">P</text></svg>',
+  star: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.7 14.7 9l6.9.6-5.2 4.5 1.6 6.8L12 17.3 5.9 20.9l1.6-6.8-5.2-4.5L9.2 9 12 2.7z"/></svg>',
+  house: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3 3.5 10v10.5a1 1 0 0 0 1 1H9.5v-6.5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v6.5h5a1 1 0 0 0 1-1V10L12 3z"/></svg>',
+  pin: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-7 7c0 5.4 7 13 7 13s7-7.6 7-13a7 7 0 0 0-7-7zm0 9.6A2.6 2.6 0 1 1 12 6.4a2.6 2.6 0 0 1 0 5.2z"/></svg>',
+  wrench: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 1 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2-2 2.5-2.5z"/></svg>',
+  thermo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 14.8V5.5a2 2 0 1 0-4 0v9.3a4 4 0 1 0 4 0z"/></svg>',
+  cloudSun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="7.5" r="2.2"/><path d="M7.5 3.3v1M3.3 7.5h1M4.6 4.6l.7.7"/><path d="M6.5 17h11a3.2 3.2 0 0 0 .4-6.4A5.2 5.2 0 0 0 8 9.2"/></svg>',
+  cloudRain: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 15.8h10.6a3.3 3.3 0 0 0 .4-6.6A5.3 5.3 0 0 0 7.4 8a4 4 0 0 0-.9 7.8z"/><path d="M8.3 19.3 7.5 21M12 19.3l-.8 1.7M15.7 19.3l-.8 1.7"/></svg>',
+  refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 12a8.5 8.5 0 1 1-2.8-6.3"/><polyline points="20.5 4.5 20.5 9.5 15.5 9.5"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12.5 9.5 18 20 6"/></svg>',
+  alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.6 4 2.9 18a1.7 1.7 0 0 0 1.5 2.5h15.2a1.7 1.7 0 0 0 1.5-2.5L13.4 4a1.7 1.7 0 0 0-2.8 0z"/><line x1="12" y1="10" x2="12" y2="14"/><circle cx="12" cy="17" r="0.9" fill="currentColor" stroke="none"/></svg>',
+  clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5l3.2 1.8"/></svg>',
+  map: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><polygon points="9 3.5 3.5 5.3 3.5 20.5 9 18.7 15 20.5 20.5 18.7 20.5 3.5 15 5.3 9 3.5"/><line x1="9" y1="3.5" x2="9" y2="18.7"/><line x1="15" y1="5.3" x2="15" y2="20.5"/></svg>',
+  swap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13.5l-3.2-3.2M20 16H6.5l3.2 3.2"/></svg>',
+  route: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="2.1"/><circle cx="18" cy="5" r="2.1"/><path d="M6.5 17c-1-5.5 2.5-7 5.5-7.5S17.5 8.5 17.5 6"/></svg>',
+  uphill: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18h4l3-8 3 5 3-9 5 12"/></svg>',
+  downhill: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l4 8 3-4 3 6 3-9 5 6"/></svg>',
+  flat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"/></svg>',
+};
+function ic(name){ return ICON[name] || ''; }
+
+const STATUS_URL = 'https://download.data.grandlyon.com/files/rdata/jcd_jcdecaux.jcdvelov/station_status.json';
+const GEOCODE_URL = 'https://api-adresse.data.gouv.fr/search/';
+const ROUTE_URL = 'https://router.project-osrm.org/route/v1/bike/';
+const WEATHER_URL = 'https://api.open-meteo.com/v1/forecast';
+const ELEVATION_URL = 'https://api.open-meteo.com/v1/elevation';
+
+// --- Carte ---
+let map, stationLayer, routeLayer;
+const LEVEL_COLOR = { ok:'#30d158', warn:'#ff9f0a', crit:'#ff453a' };
+const LEVEL_CLASS = { ok:'ok', warn:'warn', crit:'crit' };
+
+function level(n){ if(n<=0) return 'crit'; if(n<=2) return 'warn'; return 'ok'; }
+function worst(a,b){ const order = {ok:0, warn:1, crit:2}; return order[a] >= order[b] ? a : b; }
+function pct(n, cap){ return Math.max(4, Math.min(100, Math.round((n/cap)*100))); }
+
+// Vue mécanique / électrique d'une station — c'est le nombre ÉLECTRIQUE qui pilote
+// les couleurs et alertes, puisque c'est ce que tu utilises en priorité.
+function vehicleSplit(status){
+  const vt = status.vehicle_types_available || [];
+  const meca = vt.find(v => v.vehicle_type_id === 'mechanical');
+  const elec = vt.find(v => v.vehicle_type_id === 'electrical');
+  return {
+    meca: meca ? meca.count : 0,
+    elec: elec ? elec.count : status.num_bikes_available,
+    total: status.num_bikes_available,
+  };
+}
+
+function applyStaticIcons(){
+  document.getElementById('mapTitle').innerHTML = ic('map') + ' Carte des stations';
+  document.getElementById('nearbyTitle').innerHTML = ic('swap') + ' À proximité';
+  document.getElementById('tripTitle').innerHTML = ic('route') + ' Où te rends-tu ?';
+  document.getElementById('legendStar').innerHTML = ic('star') + ' meilleure alternative';
+  document.getElementById('refreshIcon').innerHTML = ic('refresh');
+}
+
+function timeAgo(epochSeconds){
+  if(!epochSeconds) return '';
+  const diffMin = Math.round((Date.now()/1000 - epochSeconds) / 60);
+  if(diffMin <= 0) return "à l'instant";
+  if(diffMin === 1) return "1 min";
+  return `${diffMin} min`;
+}
+
+function initMap(){
+  map = L.map('map', { scrollWheelZoom:false }).setView([TABAREAU.lat, TABAREAU.lon], 15);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+  stationLayer = L.layerGroup().addTo(map);
+  routeLayer = L.layerGroup().addTo(map);
+}
+
+// --- Meilleure alternative électrique parmi les stations proches ---
+function bestAlternative(statusMap, needElec, needDocks){
+  let best = null, bestScore = -1;
+  for(const st of NEARBY){
+    const s = statusMap[st.id];
+    if(!s) continue;
+    const { elec } = vehicleSplit(s);
+    const score = (needElec ? elec : 0) + (needDocks ? s.num_docks_available : 0);
+    if(score > bestScore){ bestScore = score; best = st.id; }
+  }
+  return bestScore > 0 ? best : null;
+}
+
+function stationMarker(st, s, isHome, isBest){
+  const { elec } = vehicleSplit(s);
+  const eLvl = level(elec);
+  const dLvl = level(s.num_docks_available);
+  const overall = worst(eLvl, dLvl);
+  const color = LEVEL_COLOR[overall];
+  const marker = L.circleMarker([st.lat, st.lon], {
+    radius: isHome ? 12 : 9,
+    color: isBest ? '#ffd60a' : '#ffffff',
+    weight: isHome || isBest ? 3.5 : 2,
+    fillColor: color,
+    fillOpacity: 0.95,
+  });
+  if(isHome){
+    marker.bindTooltip(st.name, {permanent:true, direction:'top', className:'stationLabel', offset:[0,-8]});
+  }
+  marker.bindPopup(
+    `<b>${st.name}</b>${isHome ? ' · chez toi' : ''}${isBest ? ' · meilleure alternative' : ''}<br>${st.address}<br>` +
+    `${elec} électrique(s) · ${vehicleSplit(s).meca} méca · ${s.num_docks_available} place(s) libre(s)`
+  );
+  return marker;
+}
+
+function renderMapStations(statusMap, bestId){
+  if(!map) return;
+  stationLayer.clearLayers();
+  const tStatus = statusMap[TABAREAU.id];
+  if(tStatus) stationMarker(TABAREAU, tStatus, true, false).addTo(stationLayer);
+  for(const st of NEARBY){
+    const s = statusMap[st.id];
+    if(s) stationMarker(st, s, false, st.id === bestId).addTo(stationLayer);
+  }
+}
+
+async function fetchStatusMap(){
+  const res = await fetch(STATUS_URL, {cache:'no-store'});
+  if(!res.ok) throw new Error('status ' + res.status);
+  const data = await res.json();
+  const map = {};
+  for(const s of data.data.stations){ map[s.station_id] = s; }
+  return map;
+}
+
+async function fetchWeather(){
+  try{
+    const url = `${WEATHER_URL}?latitude=${TABAREAU.lat}&longitude=${TABAREAU.lon}&current=temperature_2m,precipitation&minutely_15=precipitation&forecast_minutely_15=8&timezone=Europe%2FParis`;
+    const res = await fetch(url, {cache:'no-store'});
+    if(!res.ok) throw new Error('meteo ' + res.status);
+    const data = await res.json();
+    const temp = Math.round(data.current.temperature_2m);
+    const times = data.minutely_15.time;
+    const precs = data.minutely_15.precipitation;
+    let rainAt = null;
+    for(let i=0;i<precs.length;i++){ if(precs[i] >= 0.1){ rainAt = times[i]; break; } }
+    const el = document.getElementById('weatherLine');
+    el.innerHTML = rainAt
+      ? `${ic('thermo')} ${temp}°C · ${ic('cloudRain')} pluie vers ${rainAt.split('T')[1]}`
+      : `${ic('thermo')} ${temp}°C · ${ic('cloudSun')} pas de pluie proche`;
+  } catch(e){
+    document.getElementById('weatherLine').textContent = '';
+  }
+}
+
+function renderBanner(eLvl, dLvl, bestId){
+  const el = document.getElementById('banner');
+  const overall = worst(eLvl, dLvl);
+  el.className = 'banner ' + overall;
+  const bestName = bestId ? NEARBY.find(s=>s.id===bestId)?.name : null;
+  const badgeClass = overall === 'ok' ? 'ok-bg' : (overall === 'crit' ? 'crit-bg' : 'warn-bg');
+  const iconName = overall === 'ok' ? 'check' : 'alert';
+  let title, msg;
+  if(overall === 'ok'){
+    title = 'Tout va bien à Tabareau';
+    msg = "Assez de vélos électriques pour partir et assez de places pour te garer au retour.";
+  } else if(overall === 'crit'){
+    title = 'Attention, ça bloque à Tabareau';
+    const parts = [];
+    if(eLvl==='crit') parts.push("plus aucun vélo électrique dispo");
+    if(dLvl==='crit') parts.push("plus aucune place libre pour te garer");
+    msg = "Actuellement : " + parts.join(' et ') + ". ";
+    msg += bestName ? `Essaie plutôt <b>${bestName}</b>, juste à côté.` : "Regarde les stations à proximité.";
+  } else {
+    title = 'À surveiller à Tabareau';
+    const parts = [];
+    if(eLvl!=='ok') parts.push("il reste peu de vélos électriques");
+    if(dLvl!=='ok') parts.push("il reste peu de places pour te garer");
+    msg = "En ce moment, " + parts.join(' et ') + ". Ça peut encore changer d'ici que tu partes ou reviennes.";
+    if(bestName) msg += ` Sinon, <b>${bestName}</b> est une bonne alternative.`;
+  }
+  el.innerHTML = `<div class="icon-badge ${badgeClass}">${ic(iconName)}</div><div><div class="status">${title}</div><p>${msg}</p></div>`;
+}
+
+function renderKPIs(status, bestId){
+  const { meca, elec, total } = vehicleSplit(status);
+  const docks = status.num_docks_available;
+  const eLvl = level(elec);
+  const dLvl = level(docks);
+
+  // Hero : vélos électriques (la métrique qui compte vraiment pour toi)
+  document.getElementById('kpiElec').innerHTML = `
+    <div class="kpi-head">
+      <div class="kpi-badge ${eLvl}-bg">${ic('bolt')}</div>
+      <div class="kpi-title">Vélos électriques à Tabareau</div>
+    </div>
+    <div class="kpi-num ${eLvl}-c">${elec}</div>
+    <div class="bar"><div style="width:${pct(elec, TABAREAU.capacity)}%; background:${LEVEL_COLOR[eLvl]}"></div></div>
+    <div class="kpi-sub">${meca > 0 ? `+ <b>${meca}</b> mécanique(s) en dépannage` : 'aucun mécanique en dépannage'} · <b>${total}</b> vélo(s) au total</div>
+  `;
+
+  // Docks
+  document.getElementById('kpiDocks').innerHTML = `
+    <div class="kpi-head">
+      <div class="kpi-badge ${dLvl}-bg">${ic('park')}</div>
+      <div class="kpi-title">Places libres pour te garer</div>
+    </div>
+    <div class="kpi-num ${dLvl}-c">${docks}</div>
+    <div class="bar"><div style="width:${pct(docks, TABAREAU.capacity)}%; background:${LEVEL_COLOR[dLvl]}"></div></div>
+    <div class="kpi-sub">sur <b>${TABAREAU.capacity}</b> bornes au total</div>
+  `;
+
+  // Meilleure alternative électrique
+  const altEl = document.getElementById('kpiAlt');
+  if(bestId){
+    const st = NEARBY.find(s=>s.id===bestId);
+    const s = window.__lastStatusMap[bestId];
+    const alt = vehicleSplit(s);
+    altEl.innerHTML = `
+      <div class="kpi-head">
+        <div class="kpi-badge neutral-bg">${ic('star')}</div>
+        <div class="kpi-title">Meilleure alternative</div>
+      </div>
+      <div class="kpi-alt-name">${st.name}</div>
+      <div class="kpi-sub">${ic('bolt')} <b>${alt.elec}</b> électrique(s) · ${ic('park')} <b>${s.num_docks_available}</b> place(s) · à ${st.distM} m</div>
+    `;
+  } else {
+    altEl.innerHTML = `
+      <div class="kpi-head">
+        <div class="kpi-badge ok-bg">${ic('star')}</div>
+        <div class="kpi-title">Meilleure alternative</div>
+      </div>
+      <div class="kpi-alt-empty">Pas besoin — Tabareau est en bon état.</div>
+    `;
+  }
+
+  document.getElementById('freshness').innerHTML = ic('clock') + ' données Tabareau · ' + timeAgo(status.last_reported);
+}
+
+function renderNearby(statusMap, bestId){
+  const el = document.getElementById('nearby');
+  el.innerHTML = NEARBY.map(st => {
+    const s = statusMap[st.id];
+    if(!s) return '';
+    const { meca, elec } = vehicleSplit(s);
+    const eLvl = level(elec);
+    const isBest = st.id === bestId;
+    return `
+      <div class="stationline">
+        <div>
+          <div class="name">${isBest ? `<span class="star">${ic('star')}</span>` : ''}${st.name}</div>
+          <span class="dist">${st.address} · ~${st.distM} m ${meca > 0 ? `· ${ic('wrench')} ${meca} méca` : ''}</span>
+        </div>
+        <div class="nums">
+          <span class="docksstat">${ic('park')} ${s.num_docks_available}</span>
+          <span class="elecstat ${eLvl}-bg">${ic('bolt')} ${elec}<span class="u">élec</span></span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function loadAll(){
+  const btn = document.getElementById('refreshBtn');
+  const icon = document.getElementById('refreshIcon');
+  btn.disabled = true; icon.classList.add('spinning');
+  try{
+    const statusMap = await fetchStatusMap();
+    window.__lastStatusMap = statusMap;
+    const tStatus = statusMap[TABAREAU.id];
+    if(!tStatus) throw new Error('Station Tabareau introuvable dans les données');
+    const { elec } = vehicleSplit(tStatus);
+    const eLvl = level(elec);
+    const dLvl = level(tStatus.num_docks_available);
+    const needElec = eLvl !== 'ok', needDocks = dLvl !== 'ok';
+    const bestId = (needElec || needDocks) ? bestAlternative(statusMap, needElec, needDocks) : null;
+
+    renderBanner(eLvl, dLvl, bestId);
+    renderKPIs(tStatus, bestId);
+    renderNearby(statusMap, bestId);
+    renderMapStations(statusMap, bestId);
+    fetchWeather();
+
+    const now = new Date();
+    document.getElementById('lastUpdate').textContent = now.toLocaleTimeString('fr-FR');
+  } catch(e){
+    document.getElementById('banner').className = 'banner crit';
+    document.getElementById('banner').innerHTML = `<div class="icon-badge crit-bg">${ic('alert')}</div><div><div class="status">Erreur de chargement</div><p>Impossible de récupérer les données en direct (${e.message}). Vérifie ta connexion et réessaie.</p></div>`;
+  } finally {
+    btn.disabled = false; icon.classList.remove('spinning');
+  }
+}
+
+function haversine(lat1, lon1, lat2, lon2){
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2-lat1), dLon = toRad(lon2-lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+async function fetchRoute(lat1, lon1, lat2, lon2){
+  const url = `${ROUTE_URL}${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson`;
+  const res = await fetch(url, {cache:'no-store'});
+  if(!res.ok) throw new Error('itinéraire ' + res.status);
+  const data = await res.json();
+  if(data.code !== 'Ok' || !data.routes || !data.routes.length) throw new Error('itinéraire introuvable');
+  return data.routes[0];
+}
+
+async function fetchElevationDelta(lat, lon){
+  try{
+    const url = `${ELEVATION_URL}?latitude=${TABAREAU.lat},${lat}&longitude=${TABAREAU.lon},${lon}`;
+    const res = await fetch(url, {cache:'no-store'});
+    if(!res.ok) throw new Error('elevation ' + res.status);
+    const data = await res.json();
+    const [elevTabareau, elevDest] = data.elevation;
+    return Math.round(elevTabareau - elevDest);
+  } catch(e){
+    return null;
+  }
+}
+
+function drawDestination(lat, lon, label){
+  routeLayer.clearLayers();
+  const destMarker = L.circleMarker([lat, lon], {
+    radius: 10, color:'#ffffff', weight:3, fillColor:'#0a84ff', fillOpacity:0.95
+  }).bindTooltip('Destination', {permanent:true, direction:'top', className:'stationLabel', offset:[0,-6]})
+    .bindPopup(`<b>${label}</b>`);
+  destMarker.addTo(routeLayer);
+}
+
+function drawRouteLine(coordsLonLat, dashed){
+  const latlngs = coordsLonLat.map(([lon,lat]) => [lat, lon]);
+  const line = L.polyline(latlngs, {
+    color: '#0a84ff', weight: 4, opacity: 0.9,
+    dashArray: dashed ? '6,8' : null
+  });
+  line.addTo(routeLayer);
+  return line;
+}
+
+function elevationNote(delta){
+  if(delta === null) return '';
+  if(delta >= 15) return `${ic('uphill')} Le retour grimpe d'environ ${delta} m (Tabareau est en haut de la Croix-Rousse) — vérifie qu'il te reste un électrique avant de partir.`;
+  if(delta <= -15) return `${ic('downhill')} Bonne nouvelle : le retour vers Tabareau est plutôt en descente (~${Math.abs(delta)} m).`;
+  return `${ic('flat')} Trajet globalement plat, peu de dénivelé (~${Math.abs(delta)} m).`;
+}
+
+async function estimateTrip(){
+  const q = document.getElementById('destInput').value.trim();
+  const resEl = document.getElementById('tripResult');
+  if(!q){ resEl.innerHTML = '<p class="err">Tape une adresse ou un lieu à Lyon.</p>'; return; }
+  resEl.innerHTML = '<p class="muted" style="margin-top:14px;">Recherche du lieu…</p>';
+  try{
+    const url = `${GEOCODE_URL}?q=${encodeURIComponent(q)}&lat=${TABAREAU.lat}&lon=${TABAREAU.lon}&limit=1`;
+    const res = await fetch(url, {cache:'no-store'});
+    if(!res.ok) throw new Error('geocodage ' + res.status);
+    const data = await res.json();
+    if(!data.features || data.features.length === 0){
+      resEl.innerHTML = '<p class="err">Lieu introuvable, essaie une formulation plus précise.</p>';
+      return;
+    }
+    const feat = data.features[0];
+    const [lon, lat] = feat.geometry.coordinates;
+    const label = feat.properties.label;
+    drawDestination(lat, lon, label);
+
+    const speedKmh = 14;
+    let routeKm, oneWayMin, routeNote, bounds;
+
+    try{
+      const route = await fetchRoute(TABAREAU.lat, TABAREAU.lon, lat, lon);
+      routeKm = route.distance / 1000;
+      oneWayMin = Math.max(1, Math.round((routeKm / speedKmh) * 60));
+      const line = drawRouteLine(route.geometry.coordinates, false);
+      bounds = line.getBounds();
+      routeNote = "Itinéraire calculé sur le réseau routier réel (pas forcément optimisé pistes cyclables).";
+    } catch(routeErr){
+      const straightKm = haversine(TABAREAU.lat, TABAREAU.lon, lat, lon) / 1000;
+      routeKm = straightKm * 1.3;
+      oneWayMin = Math.max(1, Math.round((routeKm / speedKmh) * 60));
+      const line = drawRouteLine([[TABAREAU.lon, TABAREAU.lat],[lon, lat]], true);
+      bounds = line.getBounds();
+      routeNote = "Service d'itinéraire indisponible : ligne à vol d'oiseau affichée en pointillés (estimation approximative).";
+    }
+
+    map.fitBounds(bounds.pad(0.25));
+
+    const elevDelta = await fetchElevationDelta(lat, lon);
+    const roundTripMin = oneWayMin * 2;
+    resEl.innerHTML = `
+      <div class="result">
+        <div class="big">${ic('pin')} ${label}</div>
+        <div>~${routeKm.toFixed(1)} km depuis Tabareau · <b>~${oneWayMin} min</b> à l'aller à vélo</div>
+        <div class="muted" style="margin-top:6px;">
+          Aller-retour : environ <b>${roundTripMin} min</b> de trajet cumulé (hors temps sur place).
+          Les disponibilités à Tabareau peuvent avoir changé d'ici là — pense à réactualiser avant de repartir et avant de rentrer.
+        </div>
+        <div class="elev-note" style="margin-top:6px;">${elevationNote(elevDelta)}</div>
+        <div class="routeNote">${routeNote}</div>
+      </div>`;
+  } catch(e){
+    resEl.innerHTML = `<p class="err">Erreur : ${e.message}</p>`;
+  }
+}
+
+document.getElementById('destInput').addEventListener('keydown', e => {
+  if(e.key === 'Enter') estimateTrip();
+});
+
+applyStaticIcons();
+initMap();
+loadAll();
+setInterval(loadAll, 60000);
+</script>
+</body>
+</html>
