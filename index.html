@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Vélo'v Tabareau</title>
+<meta name="description" content="Suivi en direct de la station Vélo'v Tabareau (Lyon) : vélos électriques disponibles, places libres, stations de secours à proximité, carte et itinéraire avec dénivelé." />
+<meta property="og:title" content="Vélo'v Tabareau" />
+<meta property="og:description" content="Suivi en direct de la station Vélo'v Tabareau (Lyon, Croix-Rousse) : disponibilité des vélos électriques, carte et itinéraire." />
+<meta property="og:type" content="website" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9A%B2%3C/text%3E%3C/svg%3E" />
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
 <style>
   :root{
@@ -293,7 +298,6 @@ const ELEVATION_URL = 'https://api.open-meteo.com/v1/elevation';
 // --- Carte ---
 let map, stationLayer, routeLayer;
 const LEVEL_COLOR = { ok:'#30d158', warn:'#ff9f0a', crit:'#ff453a' };
-const LEVEL_CLASS = { ok:'ok', warn:'warn', crit:'crit' };
 
 function level(n){ if(n<=0) return 'crit'; if(n<=2) return 'warn'; return 'ok'; }
 function worst(a,b){ const order = {ok:0, warn:1, crit:2}; return order[a] >= order[b] ? a : b; }
@@ -443,7 +447,7 @@ function renderBanner(eLvl, dLvl, bestId){
   el.innerHTML = `<div class="icon-badge ${badgeClass}">${ic(iconName)}</div><div><div class="status">${title}</div><p>${msg}</p></div>`;
 }
 
-function renderKPIs(status, bestId){
+function renderKPIs(status, bestId, statusMap){
   const { meca, elec, total } = vehicleSplit(status);
   const docks = status.num_docks_available;
   const eLvl = level(elec);
@@ -475,7 +479,7 @@ function renderKPIs(status, bestId){
   const altEl = document.getElementById('kpiAlt');
   if(bestId){
     const st = NEARBY.find(s=>s.id===bestId);
-    const s = window.__lastStatusMap[bestId];
+    const s = statusMap[bestId];
     const alt = vehicleSplit(s);
     altEl.innerHTML = `
       <div class="kpi-head">
@@ -526,7 +530,6 @@ async function loadAll(){
   btn.disabled = true; icon.classList.add('spinning');
   try{
     const statusMap = await fetchStatusMap();
-    window.__lastStatusMap = statusMap;
     const tStatus = statusMap[TABAREAU.id];
     if(!tStatus) throw new Error('Station Tabareau introuvable dans les données');
     const { elec } = vehicleSplit(tStatus);
@@ -536,7 +539,7 @@ async function loadAll(){
     const bestId = (needElec || needDocks) ? bestAlternative(statusMap, needElec, needDocks) : null;
 
     renderBanner(eLvl, dLvl, bestId);
-    renderKPIs(tStatus, bestId);
+    renderKPIs(tStatus, bestId, statusMap);
     renderNearby(statusMap, bestId);
     renderMapStations(statusMap, bestId);
     fetchWeather();
